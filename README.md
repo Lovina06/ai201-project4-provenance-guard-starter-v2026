@@ -251,24 +251,25 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 10 per minute, 200 per day
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+A legitimate writer might submit a draft, revise it, and resubmit a couple times per hour (maybe 5-10 submissions/hour peak). 10/minute allows bursts but blocks scripts that hammer the endpoint. 200/day = ~8 submissions/hour sustained over 24 hours, which is generous for real use but hostile to threshold-mapping attacks that need hundreds of variations. A script sending 1000 test inputs hits the daily limit in 5 minutes and gets cut off.
+
+**What a caller counts as:**
+
+Per `creator_id`. The rate_limit_key() function in app.py checks the `creator_id` field first, falling back to IP address only when creator_id is missing or invalid. This means:
+- One person submitting from different devices (same creator_id) shares one limit
+- Different people behind one NAT/proxy (same IP, different creator_ids) each get their own limit
+- One script spoofing thousands of creator_ids looks like thousands of callers and avoids the limit (acknowledged trade-off)
+
+This favors real users over IP-based blocking, at the cost of being bypassable by attackers who randomize creator_id. Alternative would be IP-based (harder to bypass, but household/campus shares one limit).
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
-
 ```
-
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
 ```
 
 ---

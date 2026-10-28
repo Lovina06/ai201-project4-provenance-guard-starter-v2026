@@ -151,7 +151,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -174,6 +174,10 @@ def submit():
     creator_id = payload.get("creator_id")
 
     if not text or not isinstance(text, str):
+        audit.log_rejection(
+            creator_id=payload.get("creator_id", "unknown"),
+            reason="missing_or_invalid_text",
+        )
         return jsonify({
             "error": "invalid_input",
             "message": "Field 'text' is required and must be a non-empty string",
@@ -181,18 +185,31 @@ def submit():
 
     text = text.strip()
     if not text:
+        audit.log_rejection(
+            creator_id=payload.get("creator_id", "unknown"),
+            reason="empty_text",
+        )
         return jsonify({
             "error": "invalid_input",
             "message": "Field 'text' cannot be empty or whitespace only",
         }), 400
 
     if len(text) > 50000:
+        audit.log_rejection(
+            creator_id=payload.get("creator_id", "unknown"),
+            reason="text_too_long",
+            text_length=len(text),
+        )
         return jsonify({
             "error": "invalid_input",
             "message": "Field 'text' exceeds maximum length of 50,000 characters",
         }), 400
 
     if not creator_id or not isinstance(creator_id, str) or not creator_id.strip():
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="missing_or_invalid_creator_id",
+        )
         return jsonify({
             "error": "invalid_input",
             "message": "Field 'creator_id' is required and must be a non-empty string",
