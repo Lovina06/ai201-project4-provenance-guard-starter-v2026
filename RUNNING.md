@@ -1,10 +1,30 @@
 # Running Provenance Guard
 
-Everything about how the starter works.
+Everything about how the system works, including the Unit 9 monitoring dashboard extension.
 
 This is a **web service**. It runs on your machine and you talk to it with
 `curl` from another terminal. If you've not built a backend before, that's
 assumed — the starter ships one that already answers.
+
+---
+
+## Unit 9 Extension: Monitoring Dashboard
+
+After starting the service with `python app.py`, open your browser to:
+
+```
+http://127.0.0.1:5000/dashboard
+```
+
+The dashboard shows:
+- Total submissions, error rate, appeal rate
+- Label distribution (human/ai/unsure)
+- Signal score scatter plot (model vs style)
+- Submission rate over time
+- Confidence score histogram
+
+Auto-refreshes every 10 seconds. Data comes from `/metrics` endpoint which
+aggregates the last 100 entries from `logs/audit.jsonl`.
 
 ---
 

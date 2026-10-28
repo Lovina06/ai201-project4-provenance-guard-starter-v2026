@@ -528,4 +528,50 @@ This makes the system observable in ways the audit log alone doesn't. Reading 10
 
 ---
 
+## Instrumentation
+
+Every submission writes a structured record to `logs/audit.jsonl` with all 9 fields:
+- `timestamp`: ISO 8601 with timezone
+- `content_id`: UUID for appeals
+- `creator_id`: who submitted
+- `guess`: "human", "ai", or "unsure"
+- `model_score`, `style_score`, `combined_score`: all three signals
+- `label`: full text shown to user
+- `status`: "decided", "under_review", or "rejected"
+
+Rejections (400 errors, rate limits) also logged with `event: "rejected"` and `reason`.
+
+**10 recent log entries:**
+```json
+{"timestamp": "2026-10-28T11:52:41+00:00", "creator_id": "eval_bad_empty", "event": "rejected", "status": "rejected", "reason": "missing_or_invalid_text"}
+{"timestamp": "2026-10-28T11:52:41+00:00", "creator_id": "eval_bad_missing", "event": "rejected", "status": "rejected", "reason": "missing_or_invalid_text"}
+{"timestamp": "2026-10-28T11:52:41+00:00", "creator_id": "eval_bad_huge", "event": "rejected", "status": "rejected", "reason": "text_too_long", "text_length": 250004}
+{"timestamp": "2026-10-28T11:52:41+00:00", "creator_id": "eval_bad_null", "event": "rejected", "status": "rejected", "reason": "missing_or_invalid_text"}
+{"timestamp": "2026-10-28T11:52:41+00:00", "creator_id": "unknown", "event": "rejected", "status": "rejected", "reason": "missing_or_invalid_creator_id"}
+{"timestamp": "2026-10-28T12:12:35+00:00", "content_id": "8735e6a5-f43b-4a35-8f34-55f6f866fec5", "creator_id": "cost_test", "guess": "human", "model_score": 0.0155, "style_score": 0.6666666666666666, "combined_score": 0.27563197013888885, "label": "This text appears to have been written by a person.", "status": "decided", "text": "Test submission number 1 for cost measurement."}
+{"timestamp": "2026-10-28T12:12:35+00:00", "content_id": "05d64646-67ec-4a63-9b04-a6dcfe35d2d5", "creator_id": "cost_test", "guess": "human", "model_score": 0.0136, "style_score": 0.6666666666666666, "combined_score": 0.2747970008888888, "label": "This text appears to have been written by a person.", "status": "decided", "text": "Test submission number 2 for cost measurement."}
+{"timestamp": "2026-10-28T12:12:36+00:00", "content_id": "3841f37e-55f2-4e39-9c83-1fe934b925bb", "creator_id": "cost_test", "guess": "human", "model_score": 0.0122, "style_score": 0.6666666666666666, "combined_score": 0.27418326188888886, "label": "This text appears to have been written by a person.", "status": "decided", "text": "Test submission number 3 for cost measurement."}
+{"timestamp": "2026-10-28T12:12:36+00:00", "content_id": "50b7cd3d-5559-4d92-b4b9-fdd6fabd8c45", "creator_id": "cost_test", "guess": "human", "model_score": 0.0104, "style_score": 0.6666666666666666, "combined_score": 0.27339604088888886, "label": "This text appears to have been written by a person.", "status": "decided", "text": "Test submission number 4 for cost measurement."}
+{"timestamp": "2026-10-28T12:12:36+00:00", "content_id": "4d70dcc6-3433-44ea-a0ca-02324bd1441d", "creator_id": "cost_test", "guess": "human", "model_score": 0.0101, "style_score": 0.6666666666666666, "combined_score": 0.27326504213888886, "label": "This text appears to have been written by a person.", "status": "decided", "text": "Test submission number 5 for cost measurement."}
+```
+
+---
+
+## What It Costs
+
+**Per-run cost: 1.06 seconds of CPU time** (average of 10 measured runs)
+
+**How measured:** Ran 10 identical submissions via curl with `date +%s.%N` timing before/after each request. First run was 9.17s (model loads into memory), subsequent runs averaged 0.15s. Divided total time by 10 runs = 1.06s average per submission.
+
+**For 100 people/day:**
+- Assume 5 submissions per person = 500 submissions/day
+- 500 × 1.06s = 530 seconds = **8.8 minutes of CPU time per day**
+- On a single CPU core: easily sustainable
+- On a modest server (4 cores): trivial load
+- API cost: $0 (runs entirely locally, no external API calls)
+
+Bottleneck is the model inference (first signal). Style signal is instant. Dashboard metrics endpoint adds negligible overhead (~50ms to read/aggregate 100 log entries).
+
+---
+
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
