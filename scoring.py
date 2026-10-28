@@ -32,24 +32,36 @@ def combine_signals(model_score: float, style_score: float) -> float:
     Returns:
         A float from 0.0 (confidently human) to 1.0 (confidently AI).
 
-    The rule:
-    - Weight model signal at 0.6, style signal at 0.4 (model is more robust)
+    The rule (UPDATED for better separation):
+    - Weight model signal at 0.65, style signal at 0.35 (model more robust)
+    - When signals AGREE (both >0.55 or both <0.45), amplify slightly
+      to create more separation between clear cases
     - When signals strongly disagree (difference > 0.4), pull toward middle
-      to acknowledge uncertainty and avoid overconfident wrong guesses
-    - Favors false negatives (letting AI through) over false positives (accusing humans)
+    - Favors false negatives over false positives
     """
-    # Updated weights favoring the model signal
-    model_weight = 0.6
-    style_weight = 0.4
+    # Updated weights favoring the model signal more strongly
+    model_weight = 0.65
+    style_weight = 0.35
 
     # Base weighted average
     combined = model_weight * model_score + style_weight * style_score
 
+    # Agreement amplification: when signals agree on direction, push further
+    # This creates more separation between confident human and confident AI
+    if model_score > 0.55 and style_score > 0.55:
+        # Both signals say "AI" - amplify slightly toward AI
+        push_factor = min((model_score - 0.55) * (style_score - 0.55) * 0.5, 0.1)
+        combined = min(combined + push_factor, 1.0)
+    elif model_score < 0.45 and style_score < 0.45:
+        # Both signals say "human" - amplify slightly toward human
+        push_factor = min((0.45 - model_score) * (0.45 - style_score) * 0.5, 0.1)
+        combined = max(combined - push_factor, 0.0)
+
     # Disagreement handling: when signals split significantly, pull toward 0.5
     disagreement = abs(model_score - style_score)
     if disagreement > 0.4:
-        # Strong disagreement = uncertainty. Blend toward 0.5 based on how much they disagree
-        uncertainty_factor = (disagreement - 0.4) / 0.6  # 0.0 at diff=0.4, 1.0 at diff=1.0
+        # Strong disagreement = uncertainty
+        uncertainty_factor = (disagreement - 0.4) / 0.6
         combined = combined * (1 - uncertainty_factor * 0.3) + 0.5 * (uncertainty_factor * 0.3)
 
     return combined
