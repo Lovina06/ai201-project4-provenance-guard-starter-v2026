@@ -326,11 +326,88 @@ def get_log():
     return jsonify({"count": len(entries), "entries": entries})
 
 
+@app.get("/metrics")
+def metrics():
+    """
+    Aggregated statistics for monitoring dashboard. ← UNIT 9 EXTENSION
+
+    Returns counts, distributions, and rates computed from recent audit log entries.
+    Used by the dashboard page to visualize system health.
+    """
+    from collections import Counter
+    from datetime import datetime, timezone, timedelta
+
+    entries = audit.read_entries()
+    if not entries:
+        return jsonify({
+            "total_submissions": 0,
+            "total_appeals": 0,
+            "total_rejections": 0,
+            "label_distribution": {},
+            "recent_submissions": [],
+            "error_rate": 0.0,
+            "appeal_rate": 0.0,
+        })
+
+    # Separate by event type
+    decisions = [e for e in entries if e.get("status") == "decided"]
+    appeals = [e for e in entries if e.get("event") == "appeal"]
+    rejections = [e for e in entries if e.get("status") == "rejected"]
+
+    # Label distribution
+    label_counts = Counter(e.get("guess") for e in decisions if e.get("guess"))
+
+    # Recent submissions (last 100, with timestamps for time series)
+    recent = decisions[-100:] if len(decisions) > 100 else decisions
+    recent_data = [
+        {
+            "timestamp": e.get("timestamp"),
+            "guess": e.get("guess"),
+            "confidence": e.get("combined_score"),
+            "model_score": e.get("model_score"),
+            "style_score": e.get("style_score"),
+        }
+        for e in recent
+    ]
+
+    # Rates
+    total_submissions = len(decisions)
+    error_rate = len(rejections) / max(total_submissions + len(rejections), 1)
+    appeal_rate = len(appeals) / max(total_submissions, 1)
+
+    return jsonify({
+        "total_submissions": total_submissions,
+        "total_appeals": len(appeals),
+        "total_rejections": len(rejections),
+        "label_distribution": dict(label_counts),
+        "recent_submissions": recent_data,
+        "error_rate": error_rate,
+        "appeal_rate": appeal_rate,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+@app.get("/dashboard")
+def dashboard():
+    """
+    Live monitoring dashboard. ← UNIT 9 EXTENSION
+
+    Serves an HTML page that visualizes /metrics data in real-time.
+    Auto-refreshes every 10 seconds.
+    """
+    from pathlib import Path
+    dashboard_path = Path(__file__).parent / "dashboard.html"
+    if not dashboard_path.exists():
+        return jsonify({"error": "dashboard.html not found"}), 404
+    return dashboard_path.read_text()
+
+
 def main():
     print(f"Provenance Guard on http://{config.HOST}:{config.PORT}")
     print(f"  detector model:  {config.DETECTOR_MODEL}")
     print(f"  rate limiting:   {'ON' if config.RATE_LIMITING_ENABLED else 'off (unit 8)'}")
     print(f"  audit log:       {config.AUDIT_LOG}")
+    print(f"  dashboard:       http://{config.HOST}:{config.PORT}/dashboard  ← UNIT 9")
     print()
     print("Check it's alive:")
     print(f'  curl -X POST http://{config.HOST}:{config.PORT}/ping \\')

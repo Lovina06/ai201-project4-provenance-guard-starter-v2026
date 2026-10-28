@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provenance Guard - Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            padding: 20px;
+        }
+        .header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 15px;
+        }
+        h1 { font-size: 24px; font-weight: 600; margin-bottom: 5px; }
+        .subtitle { color: #8b949e; font-size: 14px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 16px;
+        }
+        .stat-label { color: #8b949e; font-size: 12px; margin-bottom: 5px; }
+        .stat-value { font-size: 28px; font-weight: 600; }
+        .stat-value.low { color: #3fb950; }
+        .stat-value.medium { color: #d29922; }
+        .stat-value.high { color: #f85149; }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        .chart-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #e6edf3;
+        }
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid: #30363d;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Provenance Guard Dashboard</h1>
+        <div class="subtitle">Real-time monitoring · Auto-refresh every 10s</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Submissions</div>
+            <div class="stat-value" id="totalSubmissions">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Error Rate</div>
+            <div class="stat-value" id="errorRate">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Appeal Rate</div>
+            <div class="stat-value" id="appealRate">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Appeals</div>
+            <div class="stat-value" id="totalAppeals">—</div>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-title">Label Distribution</div>
+            <canvas id="labelChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-title">Signal Scores Distribution</div>
+            <canvas id="signalChart"></canvas>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <div class="chart-title">Submission Rate (Last 100)</div>
+            <canvas id="rateChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <div class="chart-title">Confidence Distribution</div>
+            <canvas id="confidenceChart"></canvas>
+        </div>
+    </div>
+
+    <div class="footer">
+        Last updated: <span id="lastUpdate">—</span>
+    </div>
+
+    <script>
+        const charts = {};
+
+        function initCharts() {
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { labels: { color: '#e6edf3' } } },
+                scales: {
+                    y: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+                    x: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } }
+                }
+            };
+
+            // Label distribution (pie)
+            charts.label = new Chart(document.getElementById('labelChart'), {
+                type: 'pie',
+                data: {
+                    labels: ['Human', 'AI', 'Unsure'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#3fb950', '#f85149', '#d29922']
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { labels: { color: '#e6edf3' } } } }
+            });
+
+            // Signal scores (scatter)
+            charts.signal = new Chart(document.getElementById('signalChart'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Model vs Style Score',
+                        data: [],
+                        backgroundColor: '#58a6ff'
+                    }]
+                },
+                options: { ...commonOptions, scales: { ...commonOptions.scales, x: { ...commonOptions.scales.x, title: { display: true, text: 'Model Score', color: '#e6edf3' } }, y: { ...commonOptions.scales.y, title: { display: true, text: 'Style Score', color: '#e6edf3' } } } }
+            });
+
+            // Submission rate (line)
+            charts.rate = new Chart(document.getElementById('rateChart'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Submissions',
+                        data: [],
+                        borderColor: '#58a6ff',
+                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        fill: true
+                    }]
+                },
+                options: commonOptions
+            });
+
+            // Confidence distribution (histogram)
+            charts.confidence = new Chart(document.getElementById('confidenceChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['0.0-0.2', '0.2-0.4', '0.4-0.6', '0.6-0.8', '0.8-1.0'],
+                    datasets: [{
+                        label: 'Count',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: '#58a6ff'
+                    }]
+                },
+                options: commonOptions
+            });
+        }
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch('/metrics');
+                const data = await response.json();
+
+                // Update stats
+                document.getElementById('totalSubmissions').textContent = data.total_submissions;
+                document.getElementById('totalAppeals').textContent = data.total_appeals;
+
+                const errorPct = (data.error_rate * 100).toFixed(1);
+                const errorEl = document.getElementById('errorRate');
+                errorEl.textContent = errorPct + '%';
+                errorEl.className = 'stat-value ' + (data.error_rate > 0.1 ? 'high' : data.error_rate > 0.05 ? 'medium' : 'low');
+
+                const appealPct = (data.appeal_rate * 100).toFixed(1);
+                const appealEl = document.getElementById('appealRate');
+                appealEl.textContent = appealPct + '%';
+                appealEl.className = 'stat-value ' + (data.appeal_rate > 0.2 ? 'high' : data.appeal_rate > 0.1 ? 'medium' : 'low');
+
+                // Update label distribution
+                const labels = data.label_distribution || {};
+                charts.label.data.datasets[0].data = [
+                    labels.human || 0,
+                    labels.ai || 0,
+                    labels.unsure || 0
+                ];
+                charts.label.update();
+
+                // Update signal scatter
+                const recent = data.recent_submissions || [];
+                charts.signal.data.datasets[0].data = recent
+                    .filter(s => s.model_score != null && s.style_score != null)
+                    .map(s => ({ x: s.model_score, y: s.style_score }));
+                charts.signal.update();
+
+                // Update rate line (group by minute)
+                const timeGroups = {};
+                recent.forEach(s => {
+                    if (s.timestamp) {
+                        const minute = s.timestamp.substring(0, 16); // YYYY-MM-DDTHH:MM
+                        timeGroups[minute] = (timeGroups[minute] || 0) + 1;
+                    }
+                });
+                const times = Object.keys(timeGroups).sort().slice(-20);
+                charts.rate.data.labels = times.map(t => t.substring(11, 16));
+                charts.rate.data.datasets[0].data = times.map(t => timeGroups[t]);
+                charts.rate.update();
+
+                // Update confidence histogram
+                const bins = [0, 0, 0, 0, 0];
+                recent.forEach(s => {
+                    if (s.confidence != null) {
+                        const bin = Math.min(Math.floor(s.confidence * 5), 4);
+                        bins[bin]++;
+                    }
+                });
+                charts.confidence.data.datasets[0].data = bins;
+                charts.confidence.update();
+
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Failed to update dashboard:', error);
+            }
+        }
+
+        initCharts();
+        updateDashboard();
+        setInterval(updateDashboard, 10000); // Refresh every 10 seconds
+    </script>
+</body>
+</html>
