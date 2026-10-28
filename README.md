@@ -298,38 +298,103 @@ whose work got caught by it:
 
 ## Run Log and Verdicts
 
-<!-- Your five criteria across three trials. `run_eval.py --label before`. -->
-
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. False positives (my own writing) | ≤ 2/10 labeled "high-confidence AI" | 0/10 | 0/10 | 0/10 | **MET** |
+| 2. Score separation (clear cases) | ≥ 0.30 difference | 0.209 | 0.209 | 0.209 | **MISSED** |
+| 3. Label coverage (15 diverse tests) | All 3 labels appear at least once | 3/3 | 3/3 | 3/3 | **MET** |
+| 4. Appeal path (manual test) | 5/5 status changes recorded | 5/5 | 5/5 | 5/5 | **MET** |
+| 5. Bad input handling | All return 400, none crash (500) | 5/5 | 5/5 | 5/5 | **MET** |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+**Real output from one trial**, produced by `run_eval.py::main`, scoring via `scoring.py::combine_signals`:
 
+**Criterion 1 - False positives** (Trial 1, excerpt):
 ```json
+[
+  {
+    "status": 200,
+    "guess": "human",
+    "confidence": 0.31208303453106123,
+    "model_score": 0.258,
+    "style_score": 0.3932075863276531,
+    "label": "This text appears to have been written by a person.",
+    "sent": "Working through these test cases, I noticed the model struggles most w"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.42935882366594,
+    "model_score": 0.3123,
+    "style_score": 0.6049470591648499,
+    "label": "We're uncertain about this text. It has some patterns that could go either way. This isn't an accusation — just means our system can't make a confident call here.",
+    "sent": "The system design here is straightforward: two signals, one combinatio"
+  }
+]
+```
 
+**Criterion 2 - Score separation** (Trial 1):
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.672275986989638,
+    "model_score": 0.7329,
+    "style_score": 0.581339967474095,
+    "label": "This text shows patterns commonly found in AI-generated writing. If you wrote this yourself, you can appeal this decision.",
+    "sent": "The implementation of machine learning systems requires careful consid"
+  },
+  {
+    "status": 200,
+    "guess": "unsure",
+    "confidence": 0.46271594644417635,
+    "model_score": 0.4628,
+    "style_score": 0.4625898661104409,
+    "label": "We're uncertain about this text. It has some patterns that could go either way. This isn't an accusation — just means our system can't make a confident call here.",
+    "sent": "Yesterday I tripped over my cat while carrying coffee. The mug flew up"
+  }
+]
+```
+
+**Criterion 5 - Bad input** (Trial 1):
+```json
+[
+  {
+    "status": 400,
+    "guess": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "sent": "{\"creator_id\": \"eval_bad_missing\"}"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "sent": "word word word word word word word word (50,000+ chars)"
+  }
+]
 ```
 
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+**Criterion 2 (score separation) - MISSED**
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+**The problem:** Clear AI text scored 0.672, clear human text scored 0.463. Separation of only 0.209, below the 0.30 target.
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+**Stage and mechanism:** Signal one (model signal). The "clearly human" test text (personal narrative about spilling coffee) scored 0.4628 on the model signal - much higher than expected. Looking at the text: "Yesterday I tripped over my cat while carrying coffee. The mug flew up, spun twice - I swear I watched it in slow motion - and landed perfectly upright on the carpet." This is personal and specific, but uses common words in relatively predictable patterns. The model signal measures predictability, not specificity or personal voice. Common narrative vocabulary ("yesterday," "I watched," "landed on") is predictable even when the events are unique.
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+**Why signal two didn't save it:** Style score was 0.463 (also moderate), because the text has:
+- Only 3 sentences (low sentence count = 0.0 spread)
+- Moderate vocabulary diversity (type-token ratio decent but not exceptional)
+- Low punctuation density (mostly just periods, one dash, one comma)
+
+**The gap:** My "clearly human" test case wasn't actually clear to the signals. Personal anecdotes with simple vocabulary score as moderately predictable + moderately styled = middle range. To get strong separation, human text needs either:
+- Dense, ornate prose with rare vocabulary (low predictability)
+- OR highly varied sentence structure + rich punctuation (high style signal)
+
+Simple personal narrative falls in the middle on both signals.
 
 
 
