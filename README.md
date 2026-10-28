@@ -504,4 +504,28 @@ I'd widen the "unsure" band significantly (human ≤0.25, AI ≥0.70) and accept
 
 ---
 
+---
+
+<!-- ═══════════════════════ UNIT 9 — THE EXTENSION ═══════════════════════ -->
+
+## The Shape
+
+**Shape C: Operational scaffolding** — Add a monitoring dashboard that surfaces what's happening in production.
+
+The extension adds a `/metrics` endpoint and a live dashboard page that shows:
+- Submission rate over time (last 100 entries)
+- Label distribution (human/ai/unsure counts)
+- Signal score distributions (model vs style, as histograms)
+- Error and rejection rates
+- Appeal success rate
+
+This makes the system observable in ways the audit log alone doesn't. Reading 1000 JSON lines to understand system behavior isn't sustainable. The dashboard aggregates patterns, spots anomalies, and answers "is this working?" at a glance.
+
+**What's out of scope:**
+- Not adding alerting or notifications (that's a separate system)
+- Not adding a second retrieval method for historical data (stays in-memory from recent log)
+- Not rebuilding the frontend as a full React app (single static HTML page)
+
+---
+
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
